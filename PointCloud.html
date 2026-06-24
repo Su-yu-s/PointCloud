@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RANSAC PointCloud &mdash; Geometric Primitive Detection</title>
+<meta name="description" content="RANSAC-based interactive 3D point cloud analysis tool. Detect planes, spheres, cylinders, cones, tori and lines automatically.">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c0: #f9f8f6;
+    --c1: #f2f1ee;
+    --c2: #e4e2de;
+    --c3: #b0aca5;
+    --c4: #5c5852;
+    --c5: #141210;
+    --ac:  #2563eb;
+    --ac2: #1d4ed8;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+  body{font-family:'Satoshi',-apple-system,sans-serif;font-size:16px;line-height:1.6;background:var(--c0);color:var(--c5)}
+  a{color:inherit;text-decoration:none}
+  ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--c0)}::-webkit-scrollbar-thumb{background:var(--c2);border-radius:3px}
+
+  /* ===== NAV: minimal top bar ===== */
+  .nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px 56px;background:rgba(248,248,247,.88);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--c2);font-size:14px;font-weight:500;letter-spacing:.01em}
+  .nav-brand{display:flex;align-items:center;gap:44px}
+  .nav-logo{font-weight:900;font-size:15px;letter-spacing:-.02em}
+  .nav-brand a{color:var(--c4);transition:color .2s}
+  .nav-brand a:hover{color:var(--c5)}
+  .nav-cta{font-size:12px;font-weight:700;letter-spacing:.03em;padding:9px 22px;border-radius:5px;background:var(--c5);color:#fff;transition:all .2s}
+  .nav-cta:hover{background:var(--ac);transform:translateY(-1px)}
+  .nav-cta:active{transform:translateY(0)}
+  @media(max-width:640px){.nav{padding:14px 20px}.nav-brand{gap:22px}}
+
+  /* ===== SECTIONS ===== */
+  .sec{padding:144px 56px;max-width:1280px;margin:0 auto}
+  @media(max-width:900px){.sec{padding:88px 28px}}
+  @media(max-width:500px){.sec{padding:64px 18px}}
+  .hr{height:1px;background:var(--c2);border:none}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--c3);letter-spacing:.18em;text-transform:uppercase;margin-bottom:32px}
+  .h2{font-size:clamp(40px,6.5vw,72px);font-weight:900;letter-spacing:-.035em;line-height:1.03;margin-bottom:24px}
+  .h2 span{color:var(--ac)}
+  .lead{font-size:18px;color:var(--c4);max-width:540px;line-height:1.65}
+
+  /* ===== HERO ===== */
+  .hero{padding:200px 56px 112px;max-width:1280px;margin:0 auto;min-height:100vh;display:flex;align-items:center;position:relative}
+  @media(max-width:900px){.hero{padding:150px 28px 72px}}
+  @media(max-width:500px){.hero{padding:128px 18px 56px}}
+  .hero-grid{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,var(--c2) 1px,transparent 1px);background-size:28px 28px;mask-image:radial-gradient(ellipse 55% 48% at 50% 32%,black 5%,transparent 55%);-webkit-mask-image:radial-gradient(ellipse 55% 48% at 50% 32%,black 5%,transparent 55%);z-index:0}
+  .hero-body{position:relative;z-index:1;text-align:center}
+  .hero-eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--c3);letter-spacing:.14em;margin-bottom:44px;display:inline-flex;align-items:center;gap:16px}
+  .hero-eyebrow::before{content:'';width:28px;height:1px;background:var(--ac)}
+  .hero h1{font-size:clamp(44px,9vw,88px);font-weight:900;line-height:1.02;letter-spacing:-.04em;text-align:center;margin-bottom:32px}
+  .hero h1 span{color:var(--ac)}
+  .hero .sub{font-size:clamp(16px,1.8vw,20px);color:var(--c4);max-width:560px;line-height:1.6;margin:0 auto 56px}
+
+  .btns{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:15px 34px;font-size:14px;font-weight:700;letter-spacing:.02em;border-radius:5px;cursor:pointer;border:none;transition:all .2s;font-family:inherit}
+  .btn-fill{background:var(--c5);color:#fff}
+  .btn-fill:hover{background:var(--ac);transform:translateY(-2px);box-shadow:0 8px 24px rgba(37,99,235,.18)}
+  .btn-fill:active{transform:translateY(0)}
+  .btn-out{background:none;color:var(--c4);border:1px solid var(--c2)}
+  .btn-out:hover{border-color:var(--c3);color:var(--c5);transform:translateY(-2px)}
+  .btn-out:active{transform:translateY(0)}
+
+  .scroll-hint{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px}
+  @media(max-width:500px){.scroll-hint{bottom:32px}}
+  .scroll-hint span{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--c3);letter-spacing:.1em}
+  .scroll-hint-line{width:36px;height:1px;background:var(--ac)}
+
+  /* ===== FEATURES: 2-col editorial ===== */
+  .ft-grid{display:grid;grid-template-columns:1fr 1fr;margin-top:88px}
+  @media(max-width:780px){.ft-grid{grid-template-columns:1fr;margin-top:56px}}
+  .ft-card{padding:56px 0;border-bottom:1px solid var(--c2);display:flex;gap:28px}
+  @media(min-width:781px){.ft-card:nth-child(odd){padding-right:56px;border-right:1px solid var(--c2)}.ft-card:nth-child(even){padding-left:56px}}
+  .ft-num{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ac);font-weight:500;flex-shrink:0;padding-top:4px;min-width:32px}
+  .ft-card h3{font-size:32px;font-weight:900;letter-spacing:-.025em;line-height:1.1;margin-bottom:12px}
+  .ft-card p{font-size:15px;color:var(--c4);line-height:1.65}
+
+  /* ===== SHAPES: wide canvas ===== */
+  .sh-sec{background:var(--c1)}
+  .sh-grid{display:grid;grid-template-columns:repeat(3,1fr);margin-top:88px}
+  @media(max-width:700px){.sh-grid{grid-template-columns:repeat(2,1fr);margin-top:52px}}
+  .sh-cell{aspect-ratio:1.6;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;border-right:1px solid var(--c2);border-bottom:1px solid var(--c2);transition:background .25s}
+  .sh-cell:nth-child(3n){border-right:none}
+  .sh-cell:nth-last-child(-n+3){border-bottom:none}
+  @media(max-width:700px){.sh-cell:nth-child(3n){border-right:1px solid var(--c2)}.sh-cell:nth-child(2n){border-right:none}.sh-cell:nth-last-child(-n+3){border-bottom:1px solid var(--c2)}.sh-cell:nth-last-child(-n+2){border-bottom:none}}
+  .sh-cell:hover{background:var(--c0)}
+  .sh-cell svg{width:100px;height:100px;stroke:var(--c3);fill:none;stroke-width:.85;transition:all .3s}
+  .sh-cell:hover svg{stroke:var(--ac);transform:scale(1.06)}
+  .sh-name{font-size:18px;font-weight:700;letter-spacing:.04em;color:var(--c3);transition:color .2s}
+  .sh-cell:hover .sh-name{color:var(--c5)}
+
+  /* ===== STATS ===== */
+  .st-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+  @media(max-width:640px){.st-grid{grid-template-columns:repeat(2,1fr)}}
+  .st-cell{padding:72px 32px;text-align:center;border-right:1px solid var(--c2);display:flex;flex-direction:column;align-items:center;gap:16px}
+  .st-cell:last-child{border-right:none}
+  @media(max-width:640px){.st-cell:nth-child(2){border-right:none}.st-cell:nth-child(3),.st-cell:nth-child(4){border-top:1px solid var(--c2)}}
+  .st-num{font-size:clamp(52px,8vw,80px);font-weight:900;letter-spacing:-.045em;line-height:1;color:var(--c5)}
+  .st-label{font-size:14px;font-weight:500;color:var(--c3);letter-spacing:.06em}
+
+  /* ===== WORKFLOW ===== */
+  .wf-list{margin-top:88px;max-width:780px}
+  .wf-item{display:grid;grid-template-columns:64px 1fr;gap:40px;padding:48px 0;border-bottom:1px solid var(--c2);align-items:start}
+  @media(max-width:640px){.wf-item{grid-template-columns:1fr;gap:14px}}
+  .wf-num{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:500;color:var(--ac);padding-top:0;line-height:1}
+  .wf-item h3{font-size:26px;font-weight:900;letter-spacing:-.02em;margin-bottom:10px}
+  .wf-item p{font-size:15px;color:var(--c4);line-height:1.6}
+  .wf-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
+  .wf-tag{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--c3);background:var(--c1);padding:4px 12px;border-radius:4px;letter-spacing:.04em;border:1px solid var(--c2)}
+
+  /* ===== CODE ===== */
+  .cd-wrap{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-top:88px}
+  @media(max-width:860px){.cd-wrap{grid-template-columns:1fr;gap:40px}}
+  .cd-box{background:#141416;border-radius:8px;overflow:hidden;border:1px solid #2a2a2d}
+  .cd-bar{padding:14px 20px;display:flex;gap:8px;border-bottom:1px solid #2a2a2d}
+  .cd-bar span{width:12px;height:12px;border-radius:50%}
+  .cd-bar .cr{background:#ff5f57}.cd-bar .cy{background:#febc2e}.cd-bar .cg{background:#28c840}
+  .cd-body{padding:28px 24px}
+  .cd-body pre{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.95;color:#c4c7cc;margin:0}
+  .cd-body .ck{color:#c4b5fd}.cd-body .cs{color:#86efac}.cd-body .ct{color:#fde68a}.cd-body .cf{color:#93c5fd}.cd-body .cv{color:#fca5a5}.cd-body .cc{color:#555}
+
+  /* ===== CTA ===== */
+  .cta{text-align:center;padding:160px 56px;max-width:1280px;margin:0 auto}
+  @media(max-width:640px){.cta{padding:88px 24px}}
+  .cta h2{margin-bottom:24px}
+  .cta p{font-size:18px;color:var(--c4);margin-bottom:44px;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.65}
+
+  /* ===== FOOTER ===== */
+  footer{padding:28px 56px;max-width:1280px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  @media(max-width:500px){footer{padding:24px 18px;flex-direction:column;align-items:flex-start}}
+  footer,footer a{font-size:13px;color:var(--c3);font-weight:500}
+  footer a:hover{color:var(--c5)}
+  .ftr-r{display:flex;gap:22px}
+
+  /* ===== REVEAL ===== */
+  .rv{opacity:0;transform:translateY(20px);transition:opacity .65s ease,transform .65s ease}
+  .rv.in{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <a href="#" class="nav-logo">RANSAC</a>
+    <a href="#features">特性</a>
+    <a href="#shapes">形状</a>
+    <a href="#workflow">流程</a>
+  </div>
+  <a href="https://github.com/Su-yu-s/PointCloud" class="nav-cta">GitHub</a>
+</nav>
+
+<header class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-body">
+    <div class="hero-eyebrow">Qt6 &middot; OpenGL &middot; C++17</div>
+    <h1>RANSAC 点云<br><span>几何基元识别</span></h1>
+    <p class="sub">基于 RANSAC 算法的交互式三维点云分析工具。<br>平面、球体、圆柱、圆锥、圆环、直线&mdash;&mdash;所见即所得。</p>
+    <div class="btns">
+      <a href="https://github.com/Su-yu-s/PointCloud" class="btn btn-fill">查看源码 &rarr;</a>
+      <a href="#features" class="btn btn-out">了解更多</a>
+    </div>
+  </div>
+  <div class="scroll-hint"><span>SCROLL</span><div class="scroll-hint-line"></div></div>
+</header>
+
+<section class="sec" id="features">
+  <div class="mono">Features</div>
+  <h2 class="h2">点云分析所需的<span>一切</span></h2>
+  <p class="lead">从合成场景生成到工业级几何检测，统一在简洁的交互界面中完成。</p>
+  <div class="ft-grid">
+    <div class="ft-card rv"><div class="ft-num">01</div><div><h3>合成点云生成</h3><p>一键生成包含平面、球体、圆柱、圆锥、圆环和直线的复杂场景，参数自由调节。</p></div></div>
+    <div class="ft-card rv"><div class="ft-num">02</div><div><h3>RANSAC 形状检测</h3><p>基于 Schnabel 流水线的六种几何基元识别，Architecture 与 Full 双预设适配不同场景。</p></div></div>
+    <div class="ft-card rv"><div class="ft-num">03</div><div><h3>多格式文件加载</h3><p>PCD、PLY、STL、TXT/CSV 全支持。自动体素降采样，流畅处理百万级点云数据。</p></div></div>
+    <div class="ft-card rv"><div class="ft-num">04</div><div><h3>OpenGL 3D 可视化</h3><p>实时渲染，鼠标旋转、缩放、平移。每类形状独立上色，图层自由切换显示。</p></div></div>
+    <div class="ft-card rv"><div class="ft-num">05</div><div><h3>结果导出</h3><p>分形状导出内点 PCD 文件，附带剩余点云与完整检测统计报告。</p></div></div>
+    <div class="ft-card rv"><div class="ft-num">06</div><div><h3>C++17 模块化架构</h3><p>检测引擎、点云 IO 与 Qt6 可视化层三层分离，职责分明，清晰可扩展。</p></div></div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section class="sec sh-sec" id="shapes">
+  <div class="mono">Detection</div>
+  <h2 class="h2">六种<span>几何基元</span></h2>
+  <p class="lead">自动检测、独立着色、单独分离。每种形状一目了然。</p>
+  <div class="sh-grid">
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><rect x="10" y="28" width="52" height="2" rx=".5"/><path d="M16 36h40" stroke-width=".8" opacity=".5"/><path d="M22 44h28" stroke-width=".6" opacity=".3"/></svg><span class="sh-name">平面</span></div>
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><circle cx="36" cy="36" r="20"/><circle cx="36" cy="36" r="13" stroke-width=".7" opacity=".45"/><circle cx="36" cy="36" r="6" stroke-width=".5" opacity=".25"/></svg><span class="sh-name">球体</span></div>
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><ellipse cx="36" cy="36" rx="12" ry="26"/><line x1="24" y1="10" x2="48" y2="10"/><line x1="24" y1="62" x2="48" y2="62"/></svg><span class="sh-name">圆柱</span></div>
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><polygon points="36,10 58,62 14,62"/><path d="M28 44h16" stroke-width=".6" opacity=".3"/></svg><span class="sh-name">圆锥</span></div>
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><ellipse cx="36" cy="36" rx="24" ry="14"/><ellipse cx="36" cy="36" rx="12" ry="7" stroke-width=".7" opacity=".4"/></svg><span class="sh-name">圆环</span></div>
+    <div class="sh-cell rv"><svg viewBox="0 0 72 72"><line x1="14" y1="58" x2="58" y2="14" stroke-width="1.4"/><circle cx="14" cy="58" r="3" fill="var(--c3)"/><circle cx="58" cy="14" r="3" fill="var(--c3)"/></svg><span class="sh-name">直线</span></div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section class="sec" style="padding-top:0;padding-bottom:0;">
+  <div class="st-grid">
+    <div class="st-cell rv"><div class="st-num">6</div><div class="st-label">种形状类型</div></div>
+    <div class="st-cell rv"><div class="st-num">4</div><div class="st-label">种文件格式</div></div>
+    <div class="st-cell rv"><div class="st-num">C++17</div><div class="st-label">现代标准</div></div>
+    <div class="st-cell rv"><div class="st-num">172</div><div class="st-label">个源文件</div></div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section class="sec" id="workflow">
+  <div class="mono">Workflow</div>
+  <h2 class="h2">四步完成<span>检测</span></h2>
+  <p class="lead">从原始点云数据到结构化几何输出的流畅处理管线。</p>
+  <div class="wf-list">
+    <div class="wf-item rv"><div class="wf-num">01</div><div><h3>加载或生成</h3><p>导入已有的 PCD、PLY、STL 或 TXT 格式点云，也可一键生成合成测试场景。</p><div class="wf-tags"><span class="wf-tag">PCD</span><span class="wf-tag">PLY</span><span class="wf-tag">STL</span><span class="wf-tag">TXT</span></div></div></div>
+    <div class="wf-item rv"><div class="wf-num">02</div><div><h3>预处理</h3><p>自动去重、体素降采样与噪声过滤，为后续检测准备最优质量的数据。</p><div class="wf-tags"><span class="wf-tag">体素滤波</span><span class="wf-tag">去重</span><span class="wf-tag">降采样</span></div></div></div>
+    <div class="wf-item rv"><div class="wf-num">03</div><div><h3>RANSAC 检测</h3><p>Schnabel 流水线迭代提取几何基元，自适应阈值配合内点聚类，确保检测精度。</p><div class="wf-tags"><span class="wf-tag">平面</span><span class="wf-tag">球体</span><span class="wf-tag">圆柱</span><span class="wf-tag">圆锥</span><span class="wf-tag">圆环</span><span class="wf-tag">直线</span></div></div></div>
+    <div class="wf-item rv"><div class="wf-num">04</div><div><h3>可视化与导出</h3><p>在交互式 3D 视图中自由切换形状显示，分形状导出内点云与完整检测统计。</p><div class="wf-tags"><span class="wf-tag">OpenGL</span><span class="wf-tag">PCD 导出</span><span class="wf-tag">统计报告</span></div></div></div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section class="sec" style="background:var(--c1)">
+  <div class="mono">Architecture</div>
+  <h2 class="h2">清晰分层<span>强劲内核</span></h2>
+  <p class="lead">检测引擎、点云 IO 与 Qt6 可视化层各司其职。C++17，CMake 一条命令编译。</p>
+  <div class="cd-wrap">
+    <div>
+      <p style="color:var(--c4);font-size:16px;line-height:1.75;">核心库封装 RANSAC 算法与所有文件 IO 逻辑，GUI 层仅负责渲染与交互。模块边界清晰，易于测试、维护与扩展。</p>
+      <p style="margin-top:28px;"><a href="https://github.com/Su-yu-s/PointCloud" class="btn btn-fill" style="display:inline-flex;">浏览完整源码 &rarr;</a></p>
+    </div>
+    <div class="cd-box rv">
+      <div class="cd-bar"><span class="cr"></span><span class="cy"></span><span class="cg"></span></div>
+      <div class="cd-body"><pre><span class="cc">// 初始化检测器</span>
+<span class="ck">auto</span> <span class="cv">detector</span> = <span class="cf">RansacDetector</span>(<span class="ct">Config</span>::<span class="cf">Architecture</span>);
+
+<span class="cc">// 加载点云文件</span>
+<span class="ck">auto</span> <span class="cv">cloud</span> = <span class="ct">PointCloudGenerator</span>::<span class="cf">loadFromFile</span>(<span class="cs">"scene.pcd"</span>);
+
+<span class="cc">// 执行检测</span>
+<span class="ck">auto</span> <span class="cv">shapes</span> = <span class="cv">detector</span>.<span class="cf">detect</span>(<span class="cv">cloud</span>);
+
+<span class="cc">// 六种基元已提取</span></pre></div>
+    </div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section class="cta">
+  <h2 class="h2">准备好<span>开始</span>了吗？</h2>
+  <p>克隆仓库，CMake 一条命令编译，几分钟即可开始分析点云。</p>
+  <a href="https://github.com/Su-yu-s/PointCloud" class="btn btn-fill">前往 GitHub &rarr;</a>
+</section>
+
+<div class="hr"></div>
+
+<footer>
+  <span>&copy; 2026 Su-yu-s.</span>
+  <div class="ftr-r">
+    <a href="https://github.com/Su-yu-s/PointCloud">GitHub</a>
+  </div>
+</footer>
+
+<script>
+const obs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.06});
+document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
+document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();document.querySelector(a.getAttribute('href'))?.scrollIntoView({behavior:'smooth',block:'start'})}));
+</script>
+</body>
+</html>

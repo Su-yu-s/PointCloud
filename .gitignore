@@ -1,0 +1,57 @@
+# ==================== 构建产物 ====================
+build/
+build-gui/
+build-vs2022/
+out/
+
+# ==================== IDE / 编辑器 ====================
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+CMakeUserPresets.json
+
+# ==================== 编译中间文件 ====================
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.log
+*.tlog
+*.lastbuildstate
+*.recipe
+*.cmake/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+
+# ==================== Qt 部署 ====================
+*.qt/
+appQtDeploy*
+qt_deploy*.cmake
+
+# ==================== 杂项 ====================
+.clangd
+*.tmp
+*.swp
+*~
+Thumbs.db
+Desktop.ini
